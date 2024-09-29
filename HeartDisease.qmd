@@ -1,0 +1,166 @@
+---
+title: "Heart Disease Prediction"
+author: "Tommy Elvebu"
+date: "2024-09-29"
+format: html
+code-fold: true
+---
+
+**In this project, we will predict heart disease using logistic regression, based on clinical data from the [Heart Disease Dataset](https://www.kaggle.com/datasets/johnsmith88/heart-disease-dataset/data).**
+
+### Data Exploration
+
+First, we import the necessary libraries:
+
+```{python}
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+```
+
+Next, we import the dataset and display the first few rows:
+
+```{python}
+heart = pd.read_csv("heart.csv")
+heart.head()
+```
+
+We can also use the `describe` function to get a statistical overview of our dataset:
+
+```{python}
+heart.describe()
+```
+
+**Key Observations:**
+
+- The average age is 54 years.
+- 70% of the dataset consists of males.
+- Over half of the patients experience chest pain to some degree (ranked 0-3).
+- Blood pressure and cholesterol levels are both above normal.
+- The average heart rate is moderately lower than normal.
+- Approximately 51% of patients have heart disease.
+
+### Correlation Matrix
+
+We can visualize the correlation between features using a heatmap:
+
+```{python}
+corr_matrix = heart.corr()
+plt.figure(figsize=(12, 8))
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm')
+```
+
+**Key Correlations:**
+
+The features that are highly correlated with our target variable are:
+
+- `exang`
+- `oldpeak`
+- `cp`
+- `thalach`
+- `slope`
+
+## Data Preprocessing
+
+First, we define the features (X) and target (y), then split the data into training and testing sets:
+
+```{python}
+X = heart.drop("target", axis=1) 
+y = heart["target"]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=313)
+```
+
+Next, we separate our dataset into categorical and numerical features. We will apply one-hot encoding to the categorical data and scaling to the numerical data, and fit them to our pipeline:
+
+```{python}
+categorical_features = ['sex', 'cp', 'fbs', 'restecg', 'exang', 'slope', 'ca', 'thal']
+numerical_features = ['age', 'chol', 'trestbps', 'thalach', 'oldpeak']
+
+categorical_transformer = OneHotEncoder(sparse_output=False, drop="first")
+numerical_transformer = StandardScaler()
+
+preprocessor = ColumnTransformer(
+   transformers=[
+      ('num', numerical_transformer, numerical_features),
+      ('cat', categorical_transformer, categorical_features)
+   ]
+)
+
+pipeline = Pipeline(steps=[
+   ('preprocessor', preprocessor),
+   ('classifier', LogisticRegression())
+])
+
+pipeline.fit(X_train, y_train)
+
+y_pred = pipeline.predict(X_test)
+```
+
+## Model Evaluation
+
+Now, we will evaluate our model's performance, starting with the confusion matrix:
+
+```{python}
+conf_matrix = confusion_matrix(y_test, y_pred)
+print("Confusion Matrix:\n", conf_matrix)
+```
+
+We observe 264 correct predictions and 44 incorrect ones. 
+
+This gives us an accuracy of:
+
+```{python}
+acc_sc = accuracy_score(y_test, y_pred)
+acc_sc
+```
+
+Furthermore, to assess how well our model handles false positives and negatives, we can use the classification report from `sklearn`:
+
+```{python}
+class_rep = classification_report(y_test, y_pred)
+print("Classification Report:\n", class_rep)
+```
+
+This indicates that our model performs very well, achieving an accuracy of 86% in distinguishing between patients with and without heart disease.
+
+## Interpretation
+
+In this section, we will explore which coefficients contribute most to the accuracy of our model:
+
+```{python}
+model = pipeline.named_steps['classifier']
+preprocessor = pipeline.named_steps['preprocessor']
+categorical_feature_names = preprocessor.named_transformers_['cat'].get_feature_names_out(categorical_features)
+
+feature_names = numerical_features + categorical_feature_names.tolist()
+coefficients = model.coef_[0]
+
+coeff_df = pd.DataFrame({'Feature': feature_names, 'Coefficient': coefficients})
+coeff_df['Absolute Coefficient'] = coeff_df['Coefficient'].abs()
+coeff_df = coeff_df.sort_values(by="Absolute Coefficient", ascending=False)
+
+print(coeff_df[['Feature', 'Coefficient']])
+```
+
+This dataframe is ranked by the absolute value of the coefficients. We observe six coefficients that stand out:
+
+- `ca_2`, `ca_1`, `ca_3`, which represent the number of major vessels colored by fluoroscopy, all have significant negative coefficients, indicating that higher values of these features are associated with a lower likelihood of heart disease.
+- `sex_1`, which represents males, indicates that males have a lower probability of heart disease compared to females.
+- `cp_3` and `cp_2`, representing levels of chest pain, have high positive coefficients, suggesting that patients with higher levels of chest pain are more likely to have heart disease compared to those with low or no chest pain.
+
+
+## Conclusion 
+
+Using logistic regression we successfully built a machine learning model to predict the presence of heart disease in patients, based on a number of features.
+
+## Sources
+
+https://www.kaggle.com/datasets/johnsmith88/heart-disease-dataset/data
+
